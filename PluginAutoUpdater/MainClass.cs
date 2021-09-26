@@ -23,6 +23,7 @@ namespace PluginAutoUpdater
         public override string Name { get; } = "PluginAutoUpdater";
         public override string Author { get; } = "Killers0992";
         public override string Prefix { get; } = "pluginautoupdater";
+        public override Version RequiredExiledVersion { get; } = new Version(3, 0, 0);
         public override Version Version { get; } = new Version(1, 0, 3);
         public override PluginPriority Priority { get; } = PluginPriority.Last;
 
@@ -84,7 +85,6 @@ namespace PluginAutoUpdater
                     continue;
                 }
                 Log.Info($"Updating plugin \"{linkedPlugin.Name}\" from version {linkedPlugin.Version} to {plugin.Value.newVersion}.");
-                File.Copy(linkedPlugin.GetPath(), $"{linkedPlugin.GetPath()}.bak");
 
                 File.Delete(linkedPlugin.GetPath());
                 using (var client = new WebClient())
@@ -93,13 +93,9 @@ namespace PluginAutoUpdater
                 }
                 Log.Info($"{linkedPlugin.Name} was updated successfully!");
                 updatedPlugins++;
-                File.Delete($"{linkedPlugin.GetPath()}.bak");
             }
             Log.Info("Checking plugins updates ended.");
-            /*if (updatedPlugins != 0)
-            {
-                Server.Restart();
-            } */
+            base.OnEnabled();
         }
     }
 }
