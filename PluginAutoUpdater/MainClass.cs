@@ -24,7 +24,7 @@ namespace PluginAutoUpdater
         public override string Author { get; } = "Killers0992";
         public override string Prefix { get; } = "pluginautoupdater";
         public override Version RequiredExiledVersion { get; } = new Version(3, 0, 0);
-        public override Version Version { get; } = new Version(1, 0, 3);
+        public override Version Version { get; } = new Version(1, 0, 4);
         public override PluginPriority Priority { get; } = PluginPriority.Last;
 
         string CalculateMD5(string filename)
@@ -64,8 +64,6 @@ namespace PluginAutoUpdater
             var plugins = Loader.Plugins
                 .Where(p => p != null)
                 .ToDictionary<IPlugin<IConfig>, string>(p => CalculateMD5(p.GetPath()));
-            plugins.Add(CalculateMD5(this.GetPath()), this);
-
             Log.Info("Get updates from ApiEndpoint...");
             var updates = GetPluginListByURL($"{Config.ApiEndpoint}/checkpluginupdates", new CheckUpdatesModel()
             {
