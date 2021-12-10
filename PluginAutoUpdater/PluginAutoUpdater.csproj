@@ -87,8 +87,8 @@
   <ItemGroup>
     <Compile Include="MainClass.cs" />
     <Compile Include="Models\CheckUpdatesModel.cs" />
-    <Compile Include="Models\UpdatePluginInfo.cs" />
-    <Compile Include="Models\UpdatePluginResponse.cs" />
+    <Compile Include="Models\UpdateFileInfo.cs" />
+    <Compile Include="Models\UpdateFilesResponse.cs" />
     <Compile Include="PluginConfig.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

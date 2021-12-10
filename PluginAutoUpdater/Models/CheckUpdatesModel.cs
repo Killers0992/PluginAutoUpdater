@@ -10,6 +10,6 @@ namespace PluginAutoUpdater.Models
     {
         public string SLVersion { get; set; }
         public string ExiledVersion { get; set; }
-        public List<string> PluginHashes { get; set; } = new List<string>();
+        public List<string> Hashes { get; set; } = new List<string>();
     }
 }

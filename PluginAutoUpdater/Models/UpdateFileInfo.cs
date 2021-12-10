@@ -7,8 +7,9 @@ using System.Threading.Tasks;
 
 namespace PluginAutoUpdater.Models
 {
-    public class UpdatePluginInfo
+    public class UpdateFileInfo
     {
+        public string oldVersion { get; set; }
         public string newVersion { get; set; }
         public string newSLVersion { get; set; }
         public string newExiledVersion { get; set; }

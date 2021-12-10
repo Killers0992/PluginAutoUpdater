@@ -1,6 +1,5 @@
 ﻿using Exiled.API.Enums;
 using Exiled.API.Features;
-using Exiled.API.Interfaces;
 using Exiled.Loader;
 using PluginAutoUpdater.Models;
 using System;
@@ -8,13 +7,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using Utf8Json;
-using Utf8Json.Resolvers;
 
 namespace PluginAutoUpdater
 {
@@ -23,8 +19,10 @@ namespace PluginAutoUpdater
         public override string Name { get; } = "PluginAutoUpdater";
         public override string Author { get; } = "Killers0992";
         public override string Prefix { get; } = "pluginautoupdater";
-        public override Version RequiredExiledVersion { get; } = new Version(3, 0, 0);
-        public override Version Version { get; } = new Version(1, 0, 4);
+
+        public override Version RequiredExiledVersion { get; } = new Version(4, 0, 0);
+        public override Version Version { get; } = new Version(1, 0, 5);
+
         public override PluginPriority Priority { get; } = PluginPriority.Last;
 
         string CalculateMD5(string filename)
@@ -39,9 +37,9 @@ namespace PluginAutoUpdater
             }
         }
 
-        public UpdatePluginResponse GetPluginListByURL(string url, CheckUpdatesModel model)
+        public UpdateFilesResponse CheckUpdates(string apiUrl, CheckUpdatesModel model)
         {
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"{apiUrl}/checkupdates");
             request.Method = "POST";
             request.ContentType = "application/json";
 
@@ -50,49 +48,85 @@ namespace PluginAutoUpdater
                 streamWriter.Write(Encoding.UTF8.GetString(Utf8Json.JsonSerializer.Serialize(model)));
             }
 
-            var webResponse = request.GetResponse();
-            var webStream = webResponse.GetResponseStream();
-            var responseReader = new StreamReader(webStream);
-            var response = responseReader.ReadToEnd().Trim();
-            UpdatePluginResponse deserializedClass = Utf8Json.JsonSerializer.Deserialize<UpdatePluginResponse>(response);
-            responseReader.Close();
-            return deserializedClass;
+            HttpWebResponse webResponse;
+            try
+            {
+                webResponse = (HttpWebResponse)request.GetResponse();
+            }
+            catch (Exception)
+            {
+                Log.Info($"[CheckUpdates] API is not responding! (website is down)");
+                return null;
+            }
+
+            UpdateFilesResponse result = null;
+            using (var webStream = webResponse.GetResponseStream())
+            {
+                using (var responseReader = new StreamReader(webStream))
+                {
+                    var response = responseReader.ReadToEnd();
+
+                    switch (webResponse.StatusCode)
+                    {
+                        case HttpStatusCode.BadGateway:
+                            Log.Info($"[CheckUpdates] API is not responding! (website is down)");
+                            break;
+                        case HttpStatusCode.BadRequest:
+                            Log.Info($"[CheckStatus] API returned status code \"BadRequest\".");
+                            break;
+                        default:
+                            result = JsonSerializer.Deserialize<UpdateFilesResponse>(response);
+                            break;
+                    }
+                }
+            }
+            return result;
         }
 
         public override void OnEnabled()
         {
-            var plugins = Loader.Plugins
-                .Where(p => p != null)
-                .ToDictionary<IPlugin<IConfig>, string>(p => CalculateMD5(p.GetPath()));
-            Log.Info("Get updates from ApiEndpoint...");
-            var updates = GetPluginListByURL($"{Config.ApiEndpoint}/checkpluginupdates", new CheckUpdatesModel()
+            var files = new Dictionary<string, string>();
+            foreach(var file in Directory.GetFiles(Paths.Plugins, "*.dll", SearchOption.AllDirectories))
             {
-                ExiledVersion = Loader.Version.ToString(),
+                var hash = CalculateMD5(file);
+
+                if (!files.ContainsKey(hash))
+                    files.Add(hash, file);
+            }
+
+            Log.Info("Get updates from ApiEndpoint...");
+            var updates = CheckUpdates(Config.ApiEndpoint, new CheckUpdatesModel()
+            {
+                ExiledVersion = Loader.Version.ToString(3),
                 SLVersion = GameCore.Version.VersionString,
-                PluginHashes = plugins.Keys.ToList()
+                Hashes = files.Keys.ToList()
             });
+
             if (updates == null)
                 return;
-            int updatedPlugins = 0;
-            foreach (var plugin in updates.pluginsToUpdate)
+
+            foreach (var plugin in updates.filesToUpdate)
             {
-                var linkedPlugin = plugins[plugin.Key];
-                if (Config.PluginBlacklist.Contains(linkedPlugin.Prefix))
+                var file = files[plugin.Key];
+
+                var name = Path.GetFileNameWithoutExtension(file);
+
+                if (Config.PluginBlacklist.Contains(name))
                 {
-                    Log.Info($"Skip update for plugin \"{linkedPlugin.Name}\".");
+                    Log.Info($"Skip update for file \"{name}\".");
                     continue;
                 }
-                Log.Info($"Updating plugin \"{linkedPlugin.Name}\" from version {linkedPlugin.Version} to {plugin.Value.newVersion}.");
 
-                File.Delete(linkedPlugin.GetPath());
+                Log.Info($"Updating file \"{name}\" from version {plugin.Value.oldVersion} to {plugin.Value.newVersion}.");
+
+                File.Delete(files[plugin.Key]);
                 using (var client = new WebClient())
                 {
-                    client.DownloadFile(plugin.Value.downloadURL, linkedPlugin.GetPath());
+                    client.DownloadFile(plugin.Value.downloadURL, file);
                 }
-                Log.Info($"{linkedPlugin.Name} was updated successfully!");
-                updatedPlugins++;
+                Log.Info($"{name} was updated successfully!");
             }
-            Log.Info("Checking plugins updates ended.");
+            Log.Info("Checking updates ended.");
             base.OnEnabled();
         }
     }

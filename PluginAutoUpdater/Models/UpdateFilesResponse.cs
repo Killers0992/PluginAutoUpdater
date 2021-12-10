@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 
 namespace PluginAutoUpdater.Models
 {
-    public class UpdatePluginResponse
+    public class UpdateFilesResponse
     {
-        public Dictionary<string, UpdatePluginInfo> pluginsToUpdate { get; set; } = new Dictionary<string, UpdatePluginInfo>();
+        public Dictionary<string, UpdateFileInfo> filesToUpdate { get; set; } = new Dictionary<string, UpdateFileInfo>();
     }
 }
