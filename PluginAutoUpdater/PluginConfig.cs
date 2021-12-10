@@ -1,4 +1,5 @@
 ﻿using Exiled.API.Interfaces;
+using PluginAutoUpdater.Enums;
 using System.Collections.Generic;
 using System.ComponentModel;
 
@@ -13,5 +14,9 @@ namespace PluginAutoUpdater
         {
             "exampleplugin"
         };
+
+        [Description("Action done after downloading new update.")]
+        public UpdateAction UpdateAction { get; set; } = UpdateAction.RestartNowIfEmpty;
+
     }
 }

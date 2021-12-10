@@ -85,6 +85,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Enums\UpdateAction.cs" />
     <Compile Include="MainClass.cs" />
     <Compile Include="Models\CheckUpdatesModel.cs" />
     <Compile Include="Models\UpdateFileInfo.cs" />

@@ -1,7 +1,10 @@
 ﻿using Exiled.API.Enums;
 using Exiled.API.Features;
 using Exiled.Loader;
+using MEC;
+using PluginAutoUpdater.Enums;
 using PluginAutoUpdater.Models;
+using RoundRestarting;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -21,9 +24,11 @@ namespace PluginAutoUpdater
         public override string Prefix { get; } = "pluginautoupdater";
 
         public override Version RequiredExiledVersion { get; } = new Version(4, 0, 0);
-        public override Version Version { get; } = new Version(1, 0, 5);
+        public override Version Version { get; } = new Version(1, 0, 6);
 
         public override PluginPriority Priority { get; } = PluginPriority.Last;
+
+
 
         string CalculateMD5(string filename)
         {
@@ -83,10 +88,12 @@ namespace PluginAutoUpdater
             return result;
         }
 
-        public override void OnEnabled()
+        public void CheckUpdates()
         {
+            NextUpdateCheck = DateTime.Now.AddSeconds(120);
+
             var files = new Dictionary<string, string>();
-            foreach(var file in Directory.GetFiles(Paths.Plugins, "*.dll", SearchOption.AllDirectories))
+            foreach (var file in Directory.GetFiles(Paths.Plugins, "*.dll", SearchOption.AllDirectories))
             {
                 var hash = CalculateMD5(file);
 
@@ -104,6 +111,8 @@ namespace PluginAutoUpdater
 
             if (updates == null)
                 return;
+
+            int updated = 0;
 
             foreach (var plugin in updates.filesToUpdate)
             {
@@ -125,8 +134,64 @@ namespace PluginAutoUpdater
                     client.DownloadFile(plugin.Value.downloadURL, file);
                 }
                 Log.Info($"{name} was updated successfully!");
+                updated++;
             }
+
+            if (updated != 0)
+            {
+                switch (Config.UpdateAction)
+                {
+                    case UpdateAction.Nothing:
+                        Log.Info($"Downloaded {updated} updates.");
+                        break;
+                    case UpdateAction.RestartNextRound:
+                        Log.Info($"Downloaded {updated} updates, server will be restarted next round.");
+                        ServerStatic.StopNextRound = ServerStatic.NextRoundAction.Restart;
+                        break;
+                    case UpdateAction.RestartNow:
+                        Log.Info($"Downloaded {updated} updates, restarting server.");
+                        ServerStatic.StopNextRound = ServerStatic.NextRoundAction.Restart;
+                        RoundRestart.InitiateRoundRestart();
+                        break;
+                    case UpdateAction.RestartNowIfEmpty:
+                        if (Player.List.Count() == 0 || !Round.IsStarted)
+                        {
+                            Log.Info($"Downloaded {updated} updates, restarting server.");
+                            ServerStatic.StopNextRound = ServerStatic.NextRoundAction.Restart;
+                            RoundRestart.InitiateRoundRestart();
+                        }
+                        else
+                        {
+                            Log.Info($"Downloaded {updated} updates, server will be restarted next round (Server is not empty).");
+                            ServerStatic.StopNextRound = ServerStatic.NextRoundAction.Restart;
+                        }
+                        break;
+                }
+            }
+
             Log.Info("Checking updates ended.");
+        }
+
+        public DateTime NextUpdateCheck = DateTime.Now;
+
+
+        public IEnumerator<float> CheckUpdatesHandler()
+        {
+            while (true)
+            {
+                try
+                {
+                    if (NextUpdateCheck < DateTime.Now)
+                        CheckUpdates();
+                }
+                catch (Exception) { }
+                yield return Timing.WaitForSeconds(1f);
+            }
+        }
+
+        public override void OnEnabled()
+        {
+            Timing.RunCoroutine(CheckUpdatesHandler());
             base.OnEnabled();
         }
     }
