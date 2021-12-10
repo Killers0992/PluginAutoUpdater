@@ -24,11 +24,9 @@ namespace PluginAutoUpdater
         public override string Prefix { get; } = "pluginautoupdater";
 
         public override Version RequiredExiledVersion { get; } = new Version(4, 0, 0);
-        public override Version Version { get; } = new Version(1, 0, 6);
+        public override Version Version { get; } = new Version(1, 0, 9);
 
         public override PluginPriority Priority { get; } = PluginPriority.Last;
-
-
 
         string CalculateMD5(string filename)
         {
@@ -92,21 +90,25 @@ namespace PluginAutoUpdater
         {
             NextUpdateCheck = DateTime.Now.AddSeconds(120);
 
-            var files = new Dictionary<string, string>();
-            foreach (var file in Directory.GetFiles(Paths.Plugins, "*.dll", SearchOption.AllDirectories))
+            if (CachedHashes == null)
             {
-                var hash = CalculateMD5(file);
+                CachedHashes = new Dictionary<string, string>();
+                foreach (var file in Directory.GetFiles(Paths.Plugins, "*.dll", SearchOption.AllDirectories))
+                {
+                    var hash = CalculateMD5(file);
 
-                if (!files.ContainsKey(hash))
-                    files.Add(hash, file);
+                    if (!CachedHashes.ContainsKey(hash))
+                        CachedHashes.Add(hash, file);
+                }
             }
+
 
             Log.Info("Get updates from ApiEndpoint...");
             var updates = CheckUpdates(Config.ApiEndpoint, new CheckUpdatesModel()
             {
                 ExiledVersion = Loader.Version.ToString(3),
                 SLVersion = GameCore.Version.VersionString,
-                Hashes = files.Keys.ToList()
+                Hashes = CachedHashes.Keys.ToList()
             });
 
             if (updates == null)
@@ -116,7 +118,7 @@ namespace PluginAutoUpdater
 
             foreach (var plugin in updates.filesToUpdate)
             {
-                var file = files[plugin.Key];
+                var file = CachedHashes[plugin.Key];
 
                 var name = Path.GetFileNameWithoutExtension(file);
 
@@ -128,7 +130,7 @@ namespace PluginAutoUpdater
 
                 Log.Info($"Updating file \"{name}\" from version {plugin.Value.oldVersion} to {plugin.Value.newVersion}.");
 
-                File.Delete(files[plugin.Key]);
+                File.Delete(CachedHashes[plugin.Key]);
                 using (var client = new WebClient())
                 {
                     client.DownloadFile(plugin.Value.downloadURL, file);
@@ -167,13 +169,16 @@ namespace PluginAutoUpdater
                         }
                         break;
                 }
+                Updated = true;
             }
 
             Log.Info("Checking updates ended.");
         }
 
-        public DateTime NextUpdateCheck = DateTime.Now;
-
+        public DateTime NextUpdateCheck = DateTime.Now.AddSeconds(5);
+        public CoroutineHandle? Handler;
+        public Dictionary<string, string> CachedHashes;
+        public bool Updated = false;
 
         public IEnumerator<float> CheckUpdatesHandler()
         {
@@ -181,18 +186,34 @@ namespace PluginAutoUpdater
             {
                 try
                 {
-                    if (NextUpdateCheck < DateTime.Now)
+                    if (NextUpdateCheck < DateTime.Now && !Updated)
                         CheckUpdates();
                 }
-                catch (Exception) { }
+                catch (Exception ex) 
+                {
+                    Log.Error(ex.ToString());
+                }
+
                 yield return Timing.WaitForSeconds(1f);
             }
         }
 
         public override void OnEnabled()
         {
-            Timing.RunCoroutine(CheckUpdatesHandler());
+            Exiled.Events.Handlers.Server.WaitingForPlayers += Server_WaitingForPlayers;
             base.OnEnabled();
+        }
+
+        public override void OnDisabled()
+        {
+            Exiled.Events.Handlers.Server.WaitingForPlayers -= Server_WaitingForPlayers;
+            base.OnDisabled();
+        }
+
+        private void Server_WaitingForPlayers()
+        {
+            if (!Handler.HasValue)
+                Handler = Timing.RunCoroutine(CheckUpdatesHandler());
         }
     }
 }
